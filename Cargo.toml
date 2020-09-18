@@ -1,5 +1,5 @@
 [package]
-name = "opl2-driver"
+name = "opl-driver"
 version = "0.1.0"
 authors = ["Dion Dokter <diondokter@gmail.com>"]
 edition = "2018"
