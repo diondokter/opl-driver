@@ -5,7 +5,7 @@ use embedded_hal::blocking::delay::DelayUs;
 use embedded_hal::blocking::spi::Write;
 use embedded_hal::digital::v2::OutputPin;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 #[derive(Debug)]
 pub enum InterfaceError {
@@ -15,20 +15,30 @@ pub enum InterfaceError {
     CommunicationError,
 }
 
-/// Our full hardware interface with the chip
+/// Our hardware interface with the chip using the shift register that is present on the opl2 audio board by Maarten Janssen
 pub struct ShiftInterface<SPI: Write<u8>, A: OutputPin, L: OutputPin, R: OutputPin, D: DelayUs<u8>>
 {
-    pub communication_interface: SPI,
-    pub address_pin: A,
-    pub latch_pin: L,
-    pub reset_pin: R,
-    pub delay: D,
+    /// The spi interface we use to drive the shift register
+    communication_interface: SPI,
+    /// The pin connected to the A0 input
+    address_pin: A,
+    /// The pin connected to the latch input of the shift register
+    latch_pin: L,
+    /// The pin connected to the reset input
+    reset_pin: R,
+    /// Some kind of delay provider
+    delay: D,
+    /// A copy of all the registers in memory.
+    ///
+    /// We need this because we can't read the OPL registers.
+    /// By keeping track of this ourselves, we can still present a read/write interface which is useful for modifying registers.
     registers: [u8; u8::max_value() as usize],
 }
 
 impl<SPI: Write<u8>, A: OutputPin, L: OutputPin, R: OutputPin, D: DelayUs<u8>>
     ShiftInterface<SPI, A, L, R, D>
 {
+    /// Creates a new hardware interface
     pub fn new(
         communication_interface: SPI,
         mut address_pin: A,
@@ -56,6 +66,7 @@ impl<SPI: Write<u8>, A: OutputPin, L: OutputPin, R: OutputPin, D: DelayUs<u8>>
         })
     }
 
+    /// Destructs the hardware interface into its pieces.
     pub fn free(self) -> (SPI, A, L, R) {
         (
             self.communication_interface,
@@ -202,6 +213,26 @@ implement_registers!(
             level_key_scaling: u8 as ScalingLevel = RW 6..=7,
             /// Attenuates the operator output level. 0 is the loudest, 3F is the softest. Attenuation range is 48dB with 0.75dB resolution.
             output_level: u8 = RW 0..=5,
+        },
+        operator_settings2(RW, [0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75], 1) = {
+            /// Determines the rising time for the sound. The higher the value, the faster the attack. If value is 0, the sound will never attack, and if value is 15, the volume jumps directly from minimum to maximum.
+            attack_rate: u8 = RW 4..=7,
+            /// Determines the diminishing time for the sound. The higher the value, the shorter the decay. If value is 0, the sound does not decay towards sustain level and stays at maximum volume after attack.
+            decay_rate: u8 = RW 0..=3,
+        },
+        operator_settings3(RW, [0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F, 0x90, 0x91, 0x92, 0x93, 0x94, 0x95], 1) = {
+            /// Determines the point at which the sound ceases to decay and chages to a sound having a constant level.
+            /// The sustain level is expressed as a fraction of the maximum level. 15 is the softest and 0 is the loudest sustain level.
+            /// 
+            /// *Note: the Sustain-bit in the register 20-35 must be set for this to have an effect.
+            /// Otherwise the sound will continue with release phase after hitting sustain level.*
+            ///
+            /// LSB is -3dB
+            ///
+            /// There is an exception when all bits are set (value=15), the actual level is -93dB instead, matching as if the value were 31. 
+            sustain_level: u8 = RW 4..=7,
+            /// Determines the rate at which the sound disappears after KEY-OFF. The higher the value, the shorter the release. Value of 0 causes the sound not to release at all, it will continue to produce sound at level before KEY-OFF.
+            release_rate: u8 = RW 0..=3,
         },
     }
 );
