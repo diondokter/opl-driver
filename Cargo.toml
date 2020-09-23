@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 device-driver = { path = "../device-driver" }
 embedded-hal = "0.2.4"
-num_enum = "0.5.1"
+num_enum = { version = "0.5.1", default-features = false }

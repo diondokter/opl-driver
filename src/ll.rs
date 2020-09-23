@@ -1,11 +1,13 @@
 use device_driver::ll::register::RegisterInterface;
-use device_driver::{create_low_level_device, implement_registers, Bit};
+use device_driver::{create_low_level_device, implement_registers};
 
 use core::fmt::Debug;
 use embedded_hal::blocking::delay::{DelayMs, DelayUs};
 use embedded_hal::blocking::spi::Write;
 use embedded_hal::digital::v2::OutputPin;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+
+pub use device_driver::Bit;
 
 #[derive(Debug)]
 pub enum InterfaceError {
@@ -179,7 +181,7 @@ create_low_level_device!(
     Opl2LL {
         // The types of errors our low level error enum must contain
         errors: [InterfaceError],
-        hardware_interface_requirements: { RegisterInterface<Address = u8> },
+        hardware_interface_requirements: { RegisterInterface<Address = u8, InterfaceError = InterfaceError> },
         hardware_interface_capabilities: {
             /// Asserts the reset pin
             fn reset(&mut self) -> Result<(), InterfaceError>;
