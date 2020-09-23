@@ -1,4 +1,4 @@
-use crate::ll;
+use crate::{instrument::BassDrum, instrument::Cymbal, instrument::HiHat, instrument::OperatorSettings, instrument::SnareDrum, instrument::TomTom, ll};
 use core::marker::PhantomData;
 use device_driver::{Bit, ll::LowLevelDevice};
 use ll::InstrumentMode;
@@ -69,17 +69,29 @@ impl<I: ll::HardwareInterface, INIT: Initialized> Opl2<I, INIT> {
     pub fn ll(&mut self) -> ll::registers::RegisterSet<I> {
         self.ll.registers()
     }
+
+    fn set_operator_settings(&mut self, channel: usize, operator: usize, settings: OperatorSettings) -> Result<(), Opl2Error> {
+        let operator = match (operator, Self::OPERATOR_MAP[channel]) {
+            (0, (operator, _)) => operator,
+            (1, (_, operator)) => operator,
+            _ => unreachable!(),
+        };
+
+        self.ll().operator_settings0().write_index(operator, |_| settings.operator_settings0)?;
+        self.ll().operator_settings1().write_index(operator, |_| settings.operator_settings1)?;
+        self.ll().operator_settings2().write_index(operator, |_| settings.operator_settings2)?;
+        self.ll().operator_settings3().write_index(operator, |_| settings.operator_settings3)?;
+        self.ll().operator_settings4().write_index(operator, |_| settings.operator_settings4)?;
+
+        Ok(())
+    }
 }
 
 impl<I: ll::HardwareInterface> Opl2<I, Melody> {
     pub fn into_rhythm_mode(mut self) -> Result<Opl2<I, Rhythm>, Opl2Error> {
-        // KEY-ON registers for channels 06, 07, and 08 must be OFF in order to use the rhythm section. Other parameters such as attack/decay/sustain/release must also be set appropriately.
+        // KEY-ON registers for channels 06, 07, and 08 must be OFF in order to use the rhythm section.
         for i in 6..=8 {
             self.ll().channel_settings1().modify_index(i, |_, w| w.key_on(Bit::Cleared))?;
-            self.ll().operator_settings2().write_index(Self::OPERATOR_MAP[i].0, |w| w.attack_rate(0xF).decay_rate(0))?;
-            self.ll().operator_settings2().write_index(Self::OPERATOR_MAP[i].1, |w| w.attack_rate(0xF).decay_rate(0))?;
-            self.ll().operator_settings3().write_index(Self::OPERATOR_MAP[i].0, |w| w.sustain_level(0).release_rate(0xF))?;
-            self.ll().operator_settings3().write_index(Self::OPERATOR_MAP[i].1, |w| w.sustain_level(0).release_rate(0xF))?;
         }
 
         self.ll().rhythm_settings().modify(|_, w| w.instrument_mode(InstrumentMode::Percussion))?;
@@ -99,8 +111,22 @@ impl<I: ll::HardwareInterface> Opl2<I, Rhythm> {
         Ok(())
     }
 
+    pub fn setup_bass_drum(&mut self, value: BassDrum) -> Result<(), Opl2Error> {
+        self.set_operator_settings(BassDrum::CHANNEL, 0, value.operator_0)?;
+        self.ll().channel_settings2().write_index(BassDrum::CHANNEL, |_| value.channel_settings2)?;
+        self.set_operator_settings(BassDrum::CHANNEL, 1, value.operator_1)?;
+
+        Ok(())
+    }
+
     pub fn snare_drum(&mut self, value: bool) -> Result<(), Opl2Error> {
         self.ll().rhythm_settings().modify(|_, w| w.snare_drum_on(value.into()))?;
+        Ok(())
+    }
+
+    pub fn setup_snare_drum(&mut self, value: SnareDrum) -> Result<(), Opl2Error> {
+        self.set_operator_settings(SnareDrum::CHANNEL, SnareDrum::OPERATOR, value.operator)?;
+
         Ok(())
     }
 
@@ -109,13 +135,31 @@ impl<I: ll::HardwareInterface> Opl2<I, Rhythm> {
         Ok(())
     }
 
+    pub fn setup_tom_tom(&mut self, value: TomTom) -> Result<(), Opl2Error> {
+        self.set_operator_settings(TomTom::CHANNEL, TomTom::OPERATOR, value.operator)?;
+
+        Ok(())
+    }
+
     pub fn cymbal(&mut self, value: bool) -> Result<(), Opl2Error> {
         self.ll().rhythm_settings().modify(|_, w| w.cymbal_on(value.into()))?;
         Ok(())
     }
 
+    pub fn setup_cymbal(&mut self, value: Cymbal) -> Result<(), Opl2Error> {
+        self.set_operator_settings(Cymbal::CHANNEL, Cymbal::OPERATOR, value.operator)?;
+
+        Ok(())
+    }
+
     pub fn hi_hat(&mut self, value: bool) -> Result<(), Opl2Error> {
         self.ll().rhythm_settings().modify(|_, w| w.hi_hat_on(value.into()))?;
+        Ok(())
+    }
+
+    pub fn setup_hi_hat(&mut self, value: HiHat) -> Result<(), Opl2Error> {
+        self.set_operator_settings(HiHat::CHANNEL, HiHat::OPERATOR, value.operator)?;
+
         Ok(())
     }
 }
