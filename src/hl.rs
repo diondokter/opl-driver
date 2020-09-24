@@ -33,6 +33,7 @@ impl<LLE: Into<ll::LowLevelError>> From<LLE> for Opl2Error {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum Note {
     C(u8),
     Cs(u8),
